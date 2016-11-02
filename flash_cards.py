@@ -11,26 +11,11 @@ app = Flask(__name__)
 app.config.from_object(__name__)
 authenticated = {}
 
-# Load default config and override config from an environment variable
-app.config.update(dict(
-    SECRET_KEY='development key',
-    USERNAMES=['linus','samuel'],
-    USERS=dict(
-        linus=dict(
-            PASSWORD='60ab74861dbd43ae51eeb7b637774ad566bafb1ed1341c5dfb183bb97bc361a7',
-            DATABASE=os.path.join(app.root_path, 'db', 'cards_linus.db')
-        ),
-        samuel=dict(
-            PASSWORD='27ece3f4389a96cff3afd85e2d65a59217b844f41c41521637a68585453c5b4d',
-            DATABASE=os.path.join(app.root_path, 'db', 'cards_samuel.db')
-        )
-    )
-))
-app.config.from_envvar('CARDS_SETTINGS', silent=True)
-
 def connect_db(db=None):
-    if not 'session_id' in session or not session['session_id'] in authenticated:
-        return None
+    print(db)
+    if db is None:
+        if not 'session_id' in session or not session['session_id'] in authenticated:
+            return None
     try:
         os.makedirs(os.path.join(app.root_path, 'db'))
     except OSError as exception:
@@ -43,10 +28,10 @@ def connect_db(db=None):
     return rv
 
 def init_user_db():
-    db_handler = connect_db()
-    if db_handler:
+    db = connect_db(os.path.join(app.root_path, 'db', 'users.db'))
+    if db:
         with app.open_resource('data/user.sql', mode='r') as f:
-            db_handler.cursor().executescript(f.read())
+            db.cursor().executescript(f.read())
         db.commit()
     else:
         print("Could not get database handler")
@@ -280,19 +265,73 @@ def get_card_by_id(card_id):
     return cur.fetchone()
 
 
-def authenticate(username, password):
-        error = None
+def retrieve_users():
+    users = {}
+    db = connect_db(os.path.join(app.root_path, 'db', 'users.db'))
+    
+    if db:
+        try:
+            query = '''
+              SELECT
+                username, password
+              FROM users
+            '''
+
+            cur = db.execute(query)
+            rows = cur.fetchall()
+            for (username, password) in rows:
+                db_path = os.path.join(app.root_path, 'db', 'cards_%s.db' % (username))
+                users[username] = dict(PASSWORD=password, DATABASE=db_path)
+        except sqlite3.Error as er:
+            if "no such table: users" in str(er):
+                init_user_db()
+            else:
+                raise
+        finally:
+            db.close()
+    
+    return users
+
+@app.route('/register/<username>/<password>')
+def register(username, password):
+    error = None
+    if username in app.config['USERNAMES']:
+        error = 'Username already taken'
+    elif len(password) < 6:
+        error = 'Password must atleast have a length of 6'
+    else:
+        db = connect_db(os.path.join(app.root_path, 'db', 'users.db'))
         pwhash = binascii.hexlify(hashlib.pbkdf2_hmac('sha256', bytes(password, 'UTF-8'), bytes(username, 'UTF-8'), 100000)).decode('UTF-8')
-        if not username in app.config['USERNAMES']:
-            error = 'Invalid username'
-        elif pwhash != app.config['USERS'][username]['PASSWORD']:
-            error = 'Invalid password'
-        else:
-            session['session_id'] = str(uuid.uuid4())
-            authenticated[session['session_id']] = username
-            print("[DEBUG]: User %s logged in with session id %s" % (username, session['session_id']))
-            session.permanent = False
-        return error
+        query = '''
+          INSERT INTO users
+            (username, password)
+          VALUES
+            (?, ?)
+        '''    
+        db.execute(query,
+                   [username,
+                    pwhash
+                   ])
+        db.commit()
+        db.close()
+        load_configuration()
+        error = "User %s was registred" % (username)
+    return error
+
+
+def authenticate(username, password):
+    error = None
+    pwhash = binascii.hexlify(hashlib.pbkdf2_hmac('sha256', bytes(password, 'UTF-8'), bytes(username, 'UTF-8'), 100000)).decode('UTF-8')
+    if not username in app.config['USERNAMES']:
+        error = 'Invalid username'
+    elif pwhash != app.config['USERS'][username]['PASSWORD']:
+        error = 'Invalid password'
+    else:
+        session['session_id'] = str(uuid.uuid4())
+        authenticated[session['session_id']] = username
+        print("[DEBUG]: User %s logged in with session id %s" % (username, session['session_id']))
+        session.permanent = False
+    return error
 
 
 @app.route('/mark_known/<card_id>/<card_type>')
@@ -327,6 +366,22 @@ def logout():
         flash("You've logged out")
     return redirect(url_for('index'))
 
+
+def load_configuration():
+    users = retrieve_users()
+    usernames = users.keys()
+
+    print(users)
+
+    # Load default config and override config from an environment variable
+    app.config.update(dict(
+        SECRET_KEY='development key',
+        USERNAMES=usernames,
+        USERS=users
+    ))
+    app.config.from_envvar('CARDS_SETTINGS', silent=True)
+
+load_configuration()
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', threaded=True)
