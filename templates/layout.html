@@ -17,7 +17,7 @@
                         <a class="navbar-brand" href="{{ url_for('index') }}">CS Flash Cards</a>
 
                         <ul class="nav navbar-nav navbar-right">
-                            {% if not session.logged_in %}
+                            {% if not session.session_id %}
                                 <li><a href="{{ url_for('login') }}">log in</a></li>
                             {% else %}
                                 <li><a href="{{ url_for('cards') }}">cards</a></li>

@@ -29,12 +29,12 @@ app.config.update(dict(
 app.config.from_envvar('CARDS_SETTINGS', silent=True)
 
 def connect_db():
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return None
     try:
         os.makedirs(os.path.join(app.root_path, 'db'))
     except OSError as exception:
-        if exception.errno != errno.EEXIST
+        if exception.errno != errno.EEXIST:
             raise
     rv = sqlite3.connect(app.config['USERS'][authenticated[session['session_id']]]['DATABASE'])
     rv.row_factory = sqlite3.Row
@@ -83,7 +83,7 @@ def initdb():
 
 @app.route('/')
 def index():
-    if session['session_id'] in authenticated:
+    if 'session_id' in session and session['session_id'] in authenticated:
         return redirect(url_for('general'))
     else:
         return redirect(url_for('login'))
@@ -91,7 +91,7 @@ def index():
 
 @app.route('/cards')
 def cards():
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     db = get_db()
     query = '''
@@ -106,7 +106,7 @@ def cards():
 
 @app.route('/filter_cards/<filter_name>')
 def filter_cards(filter_name):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
 
     filters = {
@@ -131,7 +131,7 @@ def filter_cards(filter_name):
 
 @app.route('/add', methods=['POST'])
 def add_card():
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     db = get_db()
     db.execute('INSERT INTO cards (type, front, back) VALUES (?, ?, ?)',
@@ -146,7 +146,7 @@ def add_card():
 
 @app.route('/edit/<card_id>')
 def edit(card_id):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     db = get_db()
     query = '''
@@ -161,7 +161,7 @@ def edit(card_id):
 
 @app.route('/edit_card', methods=['POST'])
 def edit_card():
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     selected = request.form.getlist('known')
     known = bool(selected)
@@ -189,7 +189,7 @@ def edit_card():
 
 @app.route('/delete/<card_id>')
 def delete(card_id):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     db = get_db()
     db.execute('DELETE FROM cards WHERE id = ?', [card_id])
@@ -201,7 +201,7 @@ def delete(card_id):
 @app.route('/general')
 @app.route('/general/<card_id>')
 def general(card_id=None):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     return memorize("general", card_id)
 
@@ -209,7 +209,7 @@ def general(card_id=None):
 @app.route('/code')
 @app.route('/code/<card_id>')
 def code(card_id=None):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     return memorize("code", card_id)
 
@@ -272,7 +272,7 @@ def get_card_by_id(card_id):
 
 @app.route('/mark_known/<card_id>/<card_type>')
 def mark_known(card_id, card_type):
-    if not session['session_id'] in authenticated:
+    if not 'session_id' in session or not session['session_id'] in authenticated:
         return redirect(url_for('login'))
     db = get_db()
     db.execute('UPDATE cards SET known = 1 WHERE id = ?', [card_id])
@@ -302,7 +302,7 @@ def login():
 
 @app.route('/logout')
 def logout():
-    if session['session_id'] in authenticated:
+    if 'session_id' in session and session['session_id'] in authenticated:
         print("[DEBUG]: User %s logged out" % (authenticated[session['session_id']]))
         authenticated.pop(session['session_id'])
         session.pop('session_id', None)
