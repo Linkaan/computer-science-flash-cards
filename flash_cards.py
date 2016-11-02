@@ -2,6 +2,7 @@ import os
 import sqlite3
 import binascii
 import hashlib
+import errno
 import uuid
 from flask import Flask, request, session, g, redirect, url_for, abort, \
     render_template, flash
@@ -30,6 +31,11 @@ app.config.from_envvar('CARDS_SETTINGS', silent=True)
 def connect_db():
     if not session['session_id'] in authenticated:
         return None
+    try:
+        os.makedirs(os.path.join(app.root_path, 'db'))
+    except OSError as exception:
+        if exception.errno != errno.EEXIST
+            raise
     rv = sqlite3.connect(app.config['USERS'][authenticated[session['session_id']]]['DATABASE'])
     rv.row_factory = sqlite3.Row
     return rv

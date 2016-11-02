@@ -1,7 +1,7 @@
 .idea/
 flash-cards-env/
 py3env/
-db/*
+db/
 __pycache__/
 cards.db
 config-personal.txt
