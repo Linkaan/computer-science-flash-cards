@@ -283,6 +283,8 @@ def mark_known(card_id, card_type):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    if 'session_id' in session and session['session_id'] in authenticated:
+        logout()
     error = None
     if request.method == 'POST':
         username = request.form['username']
