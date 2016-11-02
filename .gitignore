@@ -1,4 +1,5 @@
 .idea/
+flash-cards-env/
 py3env/
 __pycache__/
 cards.db

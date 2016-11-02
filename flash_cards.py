@@ -1,32 +1,48 @@
 import os
 import sqlite3
+import binascii
+import hashlib
+import uuid
 from flask import Flask, request, session, g, redirect, url_for, abort, \
     render_template, flash
 
 app = Flask(__name__)
 app.config.from_object(__name__)
+authenticated = {}
 
 # Load default config and override config from an environment variable
 app.config.update(dict(
-    DATABASE=os.path.join(app.root_path, 'db', 'cards.db'),
     SECRET_KEY='development key',
-    USERNAME='admin',
-    PASSWORD='default'
+    USERNAMES=['linus','samuel'],
+    USERS=dict(
+        linus=dict(
+            PASSWORD='60ab74861dbd43ae51eeb7b637774ad566bafb1ed1341c5dfb183bb97bc361a7',
+            DATABASE=os.path.join(app.root_path, 'db', 'cards_linus.db')
+        ),
+        samuel=dict(
+            PASSWORD='27ece3f4389a96cff3afd85e2d65a59217b844f41c41521637a68585453c5b4d',
+            DATABASE=os.path.join(app.root_path, 'db', 'cards_samuel.db')
+        )
+    )
 ))
 app.config.from_envvar('CARDS_SETTINGS', silent=True)
 
-
 def connect_db():
-    rv = sqlite3.connect(app.config['DATABASE'])
+    if not session['session_id'] in authenticated:
+        return None
+    rv = sqlite3.connect(app.config['USERS'][authenticated[session['session_id']]]['DATABASE'])
     rv.row_factory = sqlite3.Row
     return rv
 
 
 def init_db():
     db = get_db()
-    with app.open_resource('data/schema.sql', mode='r') as f:
-        db.cursor().executescript(f.read())
-    db.commit()
+    if db:
+        with app.open_resource('data/schema.sql', mode='r') as f:
+            db.cursor().executescript(f.read())
+        db.commit()
+    else:
+        print("Could not get database handler")
 
 
 def get_db():
@@ -49,10 +65,11 @@ def close_db(error):
 
 # Uncomment and use this to initialize database, then comment it
 #   You can rerun it to pave the database and start over
-# @app.route('/initdb')
-# def initdb():
-#     init_db()
-#     return 'Initialized the database.'
+@app.route('/initdb')
+def initdb():
+    print("Initalizing database")
+    init_db()
+    return 'Initialized the database.'
 
 
 @app.route('/')
@@ -259,12 +276,16 @@ def mark_known(card_id, card_type):
 def login():
     error = None
     if request.method == 'POST':
-        if request.form['username'] != app.config['USERNAME']:
+        username = request.form['username']
+        pwhash = binascii.hexlify(hashlib.pbkdf2_hmac('sha256', bytes(request.form['password'], 'UTF-8'), bytes(username, 'UTF-8'), 100000)).decode('UTF-8')
+        if not username in app.config['USERNAMES']:
             error = 'Invalid username'
-        elif request.form['password'] != app.config['PASSWORD']:
+        elif pwhash != app.config['USERS'][username]['PASSWORD']:
             error = 'Invalid password'
         else:
             session['logged_in'] = True
+            session['session_id'] = str(uuid.uuid4())
+            authenticated[session['session_id']] = username
             session.permanent = True  # stay logged in
             return redirect(url_for('cards'))
     return render_template('login.html', error=error)
@@ -273,9 +294,11 @@ def login():
 @app.route('/logout')
 def logout():
     session.pop('logged_in', None)
+    authenticated.pop(session['session_id'])
+    session.pop('session_id', None)
     flash("You've logged out")
     return redirect(url_for('index'))
 
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', threaded=True)
