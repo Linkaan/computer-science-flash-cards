@@ -49,8 +49,11 @@ def get_db():
     """Opens a new database connection if there is none yet for the
     current application context.
     """
+    db_handler = connect_db()
+    if not db_handler:
+        return None
     if not hasattr(g, 'sqlite_db'):
-        g.sqlite_db = connect_db()
+        g.sqlite_db = db_handler
     return g.sqlite_db
 
 
@@ -67,9 +70,9 @@ def close_db(error):
 #   You can rerun it to pave the database and start over
 @app.route('/initdb')
 def initdb():
-    print("Initalizing database")
     init_db()
-    return 'Initialized the database.'
+    flash("Initialized database")
+    return redirect(url_for('general'))
 
 
 @app.route('/')
@@ -286,16 +289,19 @@ def login():
             session['logged_in'] = True
             session['session_id'] = str(uuid.uuid4())
             authenticated[session['session_id']] = username
-            session.permanent = True  # stay logged in
+            print("[DEBUG]: User %s logged in with session id %s" % (username, session['session_id']))
+            session.permanent = False
             return redirect(url_for('cards'))
     return render_template('login.html', error=error)
 
 
 @app.route('/logout')
 def logout():
+    if session['session_id'] in authenticated:
+        print("[DEBUG]: User %s logged out" % (authenticated[session['session_id']]))
+        authenticated.pop(session['session_id'])
+        session.pop('session_id', None)
     session.pop('logged_in', None)
-    authenticated.pop(session['session_id'])
-    session.pop('session_id', None)
     flash("You've logged out")
     return redirect(url_for('index'))
 
