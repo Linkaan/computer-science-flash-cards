@@ -28,7 +28,7 @@ app.config.update(dict(
 ))
 app.config.from_envvar('CARDS_SETTINGS', silent=True)
 
-def connect_db():
+def connect_db(db=None):
     if not 'session_id' in session or not session['session_id'] in authenticated:
         return None
     try:
@@ -36,10 +36,20 @@ def connect_db():
     except OSError as exception:
         if exception.errno != errno.EEXIST:
             raise
-    rv = sqlite3.connect(app.config['USERS'][authenticated[session['session_id']]]['DATABASE'])
+    if db is None:
+        db = app.config['USERS'][authenticated[session['session_id']]]['DATABASE']
+    rv = sqlite3.connect(db)
     rv.row_factory = sqlite3.Row
     return rv
 
+def init_user_db():
+    db_handler = connect_db()
+    if db_handler:
+        with app.open_resource('data/user.sql', mode='r') as f:
+            db_handler.cursor().executescript(f.read())
+        db.commit()
+    else:
+        print("Could not get database handler")
 
 def init_db():
     db = get_db()
@@ -270,6 +280,21 @@ def get_card_by_id(card_id):
     return cur.fetchone()
 
 
+def authenticate(username, password):
+        error = None
+        pwhash = binascii.hexlify(hashlib.pbkdf2_hmac('sha256', bytes(password, 'UTF-8'), bytes(username, 'UTF-8'), 100000)).decode('UTF-8')
+        if not username in app.config['USERNAMES']:
+            error = 'Invalid username'
+        elif pwhash != app.config['USERS'][username]['PASSWORD']:
+            error = 'Invalid password'
+        else:
+            session['session_id'] = str(uuid.uuid4())
+            authenticated[session['session_id']] = username
+            print("[DEBUG]: User %s logged in with session id %s" % (username, session['session_id']))
+            session.permanent = False
+        return error
+
+
 @app.route('/mark_known/<card_id>/<card_type>')
 def mark_known(card_id, card_type):
     if not 'session_id' in session or not session['session_id'] in authenticated:
@@ -287,17 +312,8 @@ def login():
         logout()
     error = None
     if request.method == 'POST':
-        username = request.form['username']
-        pwhash = binascii.hexlify(hashlib.pbkdf2_hmac('sha256', bytes(request.form['password'], 'UTF-8'), bytes(username, 'UTF-8'), 100000)).decode('UTF-8')
-        if not username in app.config['USERNAMES']:
-            error = 'Invalid username'
-        elif pwhash != app.config['USERS'][username]['PASSWORD']:
-            error = 'Invalid password'
-        else:
-            session['session_id'] = str(uuid.uuid4())
-            authenticated[session['session_id']] = username
-            print("[DEBUG]: User %s logged in with session id %s" % (username, session['session_id']))
-            session.permanent = False
+        error = authenticate(request.form['username'], request.form['password'])
+        if error is None:
             return redirect(url_for('cards'))
     return render_template('login.html', error=error)
 
