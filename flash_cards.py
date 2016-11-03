@@ -343,7 +343,7 @@ def mark_known(card_id, card_type):
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
-    if 'session_id' in session and session['session_id'] in authenticated:
+    if 'session_id' in session:
         logout()
     error = None
     if request.method == 'POST':
@@ -355,7 +355,7 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if 'session_id' in session and session['session_id'] in authenticated:
+    if 'session_id' in session:
         logout()
     error = None
     if request.method == 'POST':
@@ -367,10 +367,10 @@ def login():
 
 @app.route('/logout')
 def logout():
-    if 'session_id' in session and session['session_id'] in authenticated:
-        print("[DEBUG]: User %s logged out" % (authenticated[session['session_id']]))
-        authenticated.pop(session['session_id'])
-        session.pop('session_id', None)
+    session_id = session.pop('session_id', None)
+    if session_id and session_id in authenticated:
+        print("[DEBUG]: User %s logged out" % (authenticated[session_id]))
+        authenticated.pop(session_id)
         flash("You've logged out")
     return redirect(url_for('index'))
 
