@@ -19,6 +19,7 @@
                         <ul class="nav navbar-nav navbar-right">
                             {% if not session.session_id %}
                                 <li><a href="{{ url_for('login') }}">log in</a></li>
+                                <li><a href="{{ url_for('register') }}">register</a></li>
                             {% else %}
                                 <li><a href="{{ url_for('cards') }}">cards</a></li>
                                 <li><a href="{{ url_for('general') }}">general</a></li>

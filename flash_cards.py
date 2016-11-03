@@ -12,7 +12,6 @@ app.config.from_object(__name__)
 authenticated = {}
 
 def connect_db(db=None):
-    print(db)
     if db is None:
         if not 'session_id' in session or not session['session_id'] in authenticated:
             return None
@@ -288,7 +287,7 @@ def retrieve_users():
     
     return users
 
-def register(username, password):
+def register_user(username, password):
     error = None
     if username in app.config['USERNAMES']:
         error = 'Username already taken'
@@ -311,6 +310,9 @@ def register(username, password):
         db.close()
         print("[DEBUG]: User %s was registred" % (username))
         load_configuration()
+        ret = authenticate(username, password)
+        if ret != None:
+          raise ValueError("Registration of user failed (%s)" % (ret))
     return error
 
 
@@ -345,7 +347,7 @@ def register():
         logout()
     error = None
     if request.method == 'POST':
-        error = register(request.form['username'], request.form['password'])
+        error = register_user(request.form['username'], request.form['password'])
         if error is None:
             return redirect(url_for('initdb'))
     return render_template('register.html', error=error)
