@@ -65,10 +65,6 @@ def close_db(error):
         g.sqlite_db.close()
 
 
-# -----------------------------------------------------------
-
-# Uncomment and use this to initialize database, then comment it
-#   You can rerun it to pave the database and start over
 @app.route('/initdb')
 def initdb():
     init_db()
@@ -292,7 +288,6 @@ def retrieve_users():
     
     return users
 
-@app.route('/register/<username>/<password>')
 def register(username, password):
     error = None
     if username in app.config['USERNAMES']:
@@ -314,8 +309,8 @@ def register(username, password):
                    ])
         db.commit()
         db.close()
+        print("[DEBUG]: User %s was registred" % (username))
         load_configuration()
-        error = "User %s was registred" % (username)
     return error
 
 
@@ -343,6 +338,17 @@ def mark_known(card_id, card_type):
     db.commit()
     flash('Card marked as known.')
     return redirect(url_for(card_type))
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if 'session_id' in session and session['session_id'] in authenticated:
+        logout()
+    error = None
+    if request.method == 'POST':
+        error = register(request.form['username'], request.form['password'])
+        if error is None:
+            return redirect(url_for('initdb'))
+    return render_template('register.html', error=error)
 
 
 @app.route('/login', methods=['GET', 'POST'])
